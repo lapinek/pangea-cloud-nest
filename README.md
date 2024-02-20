@@ -1,73 +1,72 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# Exmaple of Using Pangea Node.js SDK in a NestJS Application
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Installation 
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+All the same, all the same:
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
-
-```bash
-$ npm install
+```sh
+npm install
 ```
 
-## Running the app
+## Running
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```sh
+npm run start:dev
 ```
 
-## Test
+For further details on running a NestJS application, please consult the official README included in this project in [README.NestJS.md](README.NestJS.md)
 
-```bash
-# unit tests
-$ npm run test
+## Providing Pangea API Credentials
 
-# e2e tests
-$ npm run test:e2e
+Provide Pangea credentials and references in a `.env` file, example of which can be found in [.env.example](.env.example)
 
-# test coverage
-$ npm run test:cov
+## Loading Pangea SDK
+
+Currently, the Pangea JavaScript SDK can only be imported as a [native JavaScript module](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules), but a default installation of NestJS project attempts to load it using using the Node.js [CommonJS modules](https://nodejs.org/api/esm.html#enabling) system.
+
+As a result, if you try to import the SDK as an ES module, you may receive an error. For example:
+
+```typescript
+import { PangeaConfig, AuditService } from 'pangea-node-sdk';
 ```
 
-## Support
+```bash
+src/app.service.ts:4:44 - error TS1479: The current file is a CommonJS module whose imports will produce 'require' calls; however, the referenced file is an ECMAScript module and cannot be imported with 'require'. Consider writing a dynamic 'import("pangea-node-sdk")' call instead.
+  To convert this file to an ECMAScript module, change its file extension to '.mts', or add the field `"type": "module"` to '/Users/<path>/pangea-nest/package.json'.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+4 import { PangeaConfig, AuditService } from 'pangea-node-sdk';
+```
 
-## Stay in touch
+One way to get around this error is to import the SDK dynamically, example of which is provided in [src/app.service.ts](src/app.service.ts):
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```typescript
+// ...
 
-## License
+const postAuditLog = async (data) => {
+  const Pangea = await import('pangea-node-sdk');
+  const PangeaConfig = Pangea.PangeaConfig;
+  const AuditService = Pangea.AuditService;
 
-Nest is [MIT licensed](LICENSE).
+  const auditConfig = new PangeaConfig({
+    domain: process.env.PANGEA_AUDIT_DOMAIN,
+    configID: process.env.PANGEA_AUDIT_CONFIG_ID,
+  });
+
+  const auditService = new AuditService(
+    process.env.PANGEA_AUDIT_TOKEN,
+    auditConfig,
+  );
+
+  auditService
+    .log(data, {
+      verbose: true,
+    })
+    .then((response) => {
+      console.log('auditService response:', util.inspect(response.result));
+    });
+};
+
+// ...
+```
+
+You might also need to experiment with the "module" value in [tsconfig.json](tsconfig.json) to prevent down-leveling the dynamic import to the `require` syntax in built application. In this example, the "module" value is changed from the default "commonjs" to "nodenext". Acceptable values could be found in the [TypeScript docs](https://www.typescriptlang.org/tsconfig#module). 
